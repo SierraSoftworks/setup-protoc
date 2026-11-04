@@ -3,6 +3,15 @@ name: Release
 on:
   release:
     types: [published]
+  # Lets a maintainer (re)build dist/ for an existing release tag, e.g. when the
+  # release event never triggered this workflow and the tag shipped without
+  # dist/index.js (which action.yml runs).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build dist/ for (e.g. v3.0.2)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,7 +24,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Set Node.js 24.x
         uses: actions/setup-node@v4
@@ -29,9 +38,13 @@ jobs:
       - name: Build
         run: npm run package
 
+      - name: Verify dist was built
+        # action.yml runs dist/index.js; never publish a tag without it.
+        run: test -f dist/index.js
+
       - name: Update release tag with dist
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           # Uses the format ${user.id}+${user.login}@users.noreply.github.com
           # from https://api.github.com/users/github-actions%5Bbot%5D
